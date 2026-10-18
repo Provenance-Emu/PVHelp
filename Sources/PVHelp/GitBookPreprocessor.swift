@@ -1,5 +1,5 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import Foundation
 
@@ -11,14 +11,16 @@ import Foundation
 /// live and contributors reuse GitBook conventions.
 public enum GitBookPreprocessor {
     /// Apply all GitBook-to-standard-markdown transforms in sequence.
-    public static func process(_ markdown: String) -> String {
+    /// - Parameter assetBaseURL: where relative `.gitbook/assets/…` images resolve
+    ///   (the wiki's raw-content base, `WikiConfiguration.baseURL`).
+    public static func process(_ markdown: String, assetBaseURL: URL) -> String {
         var result = stripFrontMatter(markdown)
         result = convertHintBlocks(result)
         result = convertTabBlocks(result)
         result = convertHTMLTables(result)
         result = convertHTMLDetailsBlocks(result)
         result = convertHTMLInlineTags(result)
-        result = resolveImagePaths(result)
+        result = resolveImagePaths(result, assetBaseURL: assetBaseURL)
         return result
     }
 
@@ -286,7 +288,7 @@ public enum GitBookPreprocessor {
     }
 
     /// Resolve relative image paths to absolute GitHub raw URLs.
-    public static func resolveImagePaths(_ markdown: String) -> String {
+    public static func resolveImagePaths(_ markdown: String, assetBaseURL: URL) -> String {
         let pattern = #"!\[([^\]]*)\]\((?:\.\./)*(\.gitbook/assets/[^)]+)\)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return markdown
@@ -303,7 +305,7 @@ public enum GitBookPreprocessor {
 
             let alt = nsString.substring(with: altRange)
             let path = nsString.substring(with: pathRange)
-            let absoluteURL = WikiConstants.baseURL.appendingPathComponent(path).absoluteString
+            let absoluteURL = assetBaseURL.appendingPathComponent(path).absoluteString
             let replacement = "![\(alt)](\(absoluteURL))"
 
             result = (result as NSString).replacingCharacters(in: fullRange, with: replacement)

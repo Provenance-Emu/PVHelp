@@ -1,5 +1,5 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import XCTest
 @testable import PVHelp
@@ -41,7 +41,7 @@ final class WikiContentProviderTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        cache = WikiContentCache()
+        cache = WikiContentCache(configuration: TestWiki.configuration)
         cache.clearAll()
     }
 
@@ -54,21 +54,21 @@ final class WikiContentProviderTests: XCTestCase {
 
     func testLoadPage_cacheMissAndNoNetwork_bundledPathReturnsBundledContent() async {
         let loader = MockWikiLoader.failure()
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
-        let page = await provider.loadPage(path: WikiConstants.Paths.jitGuide, title: "JIT")
+        let page = await provider.loadPage(path: TestWiki.jitGuide, title: "JIT")
 
         let callCount = await loader.callCount
         XCTAssertEqual(callCount, 1)
         XCTAssertFalse(page.content.contains("**Offline**"))
         XCTAssertTrue(page.content.contains("JIT"), "expected real bundled JIT guide content, got: \(page.content.prefix(80))")
         // The fetch attempt should not have poisoned the cache with anything.
-        XCTAssertNil(cache.cachedPage(for: WikiConstants.Paths.jitGuide))
+        XCTAssertNil(cache.cachedPage(for: TestWiki.jitGuide))
     }
 
     func testLoadPage_cacheMissAndNoNetwork_unknownPathFallsBackToPlaceholder() async {
         let loader = MockWikiLoader.failure()
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let page = await provider.loadPage(path: "made-up/does-not-exist.md", title: "X")
 
@@ -77,7 +77,7 @@ final class WikiContentProviderTests: XCTestCase {
 
     func testLoadNavigationTree_cacheMissAndNoNetwork_fallsBackToBundledSummary() async {
         let loader = MockWikiLoader.failure()
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let tree = await provider.loadNavigationTree()
 
@@ -95,18 +95,18 @@ final class WikiContentProviderTests: XCTestCase {
     }
 
     func testHiddenPaths_bundledSummaryOmitsThem() async {
-        let provider = WikiContentProvider(session: MockWikiLoader.failure(), cache: cache, hiddenPaths: [WikiConstants.Paths.jitGuide])
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: MockWikiLoader.failure(), cache: cache, hiddenPaths: [TestWiki.jitGuide])
         let tree = await provider.loadNavigationTree()
         XCTAssertFalse(tree.sections.isEmpty)
-        XCTAssertFalse(paths(of: tree).contains(WikiConstants.Paths.jitGuide))
+        XCTAssertFalse(paths(of: tree).contains(TestWiki.jitGuide))
 
-        let unfiltered = await WikiContentProvider(session: MockWikiLoader.failure(), cache: cache).loadNavigationTree()
-        XCTAssertTrue(paths(of: unfiltered).contains(WikiConstants.Paths.jitGuide), "the bundled SUMMARY.md lists the JIT guide; only the filter hides it")
+        let unfiltered = await WikiContentProvider(configuration: TestWiki.configuration, session: MockWikiLoader.failure(), cache: cache).loadNavigationTree()
+        XCTAssertTrue(paths(of: unfiltered).contains(TestWiki.jitGuide), "the bundled SUMMARY.md lists the JIT guide; only the filter hides it")
     }
 
     func testHiddenPaths_remoteSummaryCannotReintroduceThem() async {
         let remote = "## Guides\n\n* [JIT](guide/jit.md)\n* [BIOS](help/gamecube-bios.md)\n"
-        let provider = WikiContentProvider(session: MockWikiLoader.success(remote), cache: cache, hiddenPaths: [WikiConstants.Paths.jitGuide])
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: MockWikiLoader.success(remote), cache: cache, hiddenPaths: [TestWiki.jitGuide])
         let tree = await provider.loadNavigationTree()
         XCTAssertEqual(paths(of: tree), ["help/gamecube-bios.md"])
     }
@@ -116,7 +116,7 @@ final class WikiContentProviderTests: XCTestCase {
             WikiNavItem(title: "JIT", path: "guide/jit.md"),
             WikiNavItem(title: "BIOS", path: "help/gamecube-bios.md"),
         ])]))
-        let provider = WikiContentProvider(session: MockWikiLoader.failure(), cache: cache, hiddenPaths: [WikiConstants.Paths.jitGuide])
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: MockWikiLoader.failure(), cache: cache, hiddenPaths: [TestWiki.jitGuide])
         let tree = await provider.loadNavigationTree()
         XCTAssertEqual(paths(of: tree), ["help/gamecube-bios.md"])
     }
@@ -126,7 +126,7 @@ final class WikiContentProviderTests: XCTestCase {
     func testLoadPage_cacheHitWithinTTL_doesNotHitNetwork() async {
         cache.cachePage("# Cached Content", for: "some/path.md")
         let loader = MockWikiLoader.failure() // would fail the test if it were called
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let page = await provider.loadPage(path: "some/path.md", title: "X")
 
@@ -139,7 +139,7 @@ final class WikiContentProviderTests: XCTestCase {
         let tree = WikiNavigationTree(sections: [WikiSection(title: "Help", items: [WikiNavItem(title: "BIOS", path: "help/gamecube-bios.md")])])
         cache.cacheNavigationTree(tree)
         let loader = MockWikiLoader.failure()
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let loaded = await provider.loadNavigationTree()
 
@@ -154,7 +154,7 @@ final class WikiContentProviderTests: XCTestCase {
         cache.cachePage("# Old Content", for: "stale/path.md")
         cache.expirePageCache(for: "stale/path.md")
         let loader = MockWikiLoader.success("# New Content")
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let page = await provider.loadPage(path: "stale/path.md", title: "X")
 
@@ -174,7 +174,7 @@ final class WikiContentProviderTests: XCTestCase {
         cache.cacheNavigationTree(staleTree)
         cache.expireNavigationCache()
         let loader = MockWikiLoader.success("## New\n\n* [New Page](new.md)\n")
-        let provider = WikiContentProvider(session: loader, cache: cache)
+        let provider = WikiContentProvider(configuration: TestWiki.configuration, session: loader, cache: cache)
 
         let tree = await provider.loadNavigationTree()
 

@@ -1,5 +1,5 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import XCTest
 @testable import PVHelp
@@ -9,7 +9,7 @@ final class WikiContentCacheTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        cache = WikiContentCache()
+        cache = WikiContentCache(configuration: TestWiki.configuration)
         cache.clearAll()
     }
 

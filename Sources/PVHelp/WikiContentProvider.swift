@@ -1,5 +1,5 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -16,20 +16,23 @@ extension URLSession: WikiURLLoading {}
 
 public final class WikiContentProvider: Sendable {
     public let cache: WikiContentCache
+    public let configuration: WikiConfiguration
     private let session: WikiURLLoading
     /// Wiki paths the navigation tree must not list (see ``WikiNavigationTree/removing(paths:)``).
     private let hiddenPaths: Set<String>
 
     /// - Parameter hiddenPaths: pages to leave out of the navigation tree, whichever source it came from.
-    public init(hiddenPaths: Set<String> = []) {
-        self.cache = WikiContentCache()
+    public init(configuration: WikiConfiguration, hiddenPaths: Set<String> = []) {
+        self.configuration = configuration
+        self.cache = WikiContentCache(configuration: configuration)
         self.session = URLSession.shared
         self.hiddenPaths = hiddenPaths
     }
 
     /// Test-only seam: inject a fake cache/transport. Not `public` — only reachable from this
     /// package's own test target via `@testable import`.
-    init(session: WikiURLLoading, cache: WikiContentCache, hiddenPaths: Set<String> = []) {
+    init(configuration: WikiConfiguration, session: WikiURLLoading, cache: WikiContentCache, hiddenPaths: Set<String> = []) {
+        self.configuration = configuration
         self.session = session
         self.cache = cache
         self.hiddenPaths = hiddenPaths
@@ -71,7 +74,7 @@ public final class WikiContentProvider: Sendable {
     }
 
     private func loadBundledNavigationTree() -> WikiNavigationTree {
-        guard let content = Self.bundledContent(forPath: WikiConstants.summaryFileName) else {
+        guard let content = bundledContent(forPath: WikiConstants.summaryFileName) else {
             return WikiNavigationTree(sections: [])
         }
         return WikiNavigationTree.parse(markdown: content).removing(paths: hiddenPaths)
@@ -92,20 +95,20 @@ public final class WikiContentProvider: Sendable {
                 // Refresh in background
                 Task { await refreshPage(path: path) }
             }
-            let processed = GitBookPreprocessor.process(cached)
+            let processed = GitBookPreprocessor.process(cached, assetBaseURL: configuration.baseURL)
             return WikiPage(path: path, title: title, content: processed)
         }
 
         // Try network
         if let content = await refreshPage(path: path) {
-            let processed = GitBookPreprocessor.process(content)
+            let processed = GitBookPreprocessor.process(content, assetBaseURL: configuration.baseURL)
             return WikiPage(path: path, title: title, content: processed)
         }
 
         // Bundled offline fallback — the app must be fully useful with only this content,
         // since it's what ships until icube-wiki exists.
-        if let bundled = Self.bundledContent(forPath: path) {
-            let processed = GitBookPreprocessor.process(bundled)
+        if let bundled = bundledContent(forPath: path) {
+            let processed = GitBookPreprocessor.process(bundled, assetBaseURL: configuration.baseURL)
             return WikiPage(path: path, title: title, content: processed)
         }
 
@@ -130,7 +133,7 @@ public final class WikiContentProvider: Sendable {
     /// resource content shipped in `WikiContent/`, mirroring the same relative layout as the
     /// `icube-wiki` repo this will eventually fetch from (see `docs/wiki-seed/` at the repo
     /// root, which is the canonical source these resources are copied from).
-    private static func bundledContent(forPath path: String) -> String? {
+    private func bundledContent(forPath path: String) -> String? {
         guard let url = bundledURL(forPath: path),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
             return nil
@@ -138,17 +141,16 @@ public final class WikiContentProvider: Sendable {
         return content
     }
 
-    private static func bundledURL(forPath path: String) -> URL? {
+    private func bundledURL(forPath path: String) -> URL? {
+        guard let bundled = configuration.bundledContent else { return nil }
         let components = path.split(separator: "/").map(String.init)
         guard let filename = components.last else { return nil }
         let ext = (filename as NSString).pathExtension
         let name = (filename as NSString).deletingPathExtension
-        // `.copy("WikiContent")` in Package.swift (load-bearing — see the comment there) nests
-        // the whole folder under a top-level "WikiContent/" directory in the produced bundle,
-        // rather than flattening its contents to the bundle root the way `.process` would.
-        // (It must not be named "Resources" — see the codesign note in Package.swift.)
-        let subdirectory = (["WikiContent"] + components.dropLast()).joined(separator: "/")
-        return Bundle.module.url(
+        // The app ships its pages as a folder (see `WikiConfiguration.BundledContent`), so
+        // they keep the wiki repo's layout under `subdirectory`.
+        let subdirectory = ([bundled.subdirectory] + components.dropLast()).joined(separator: "/")
+        return bundled.bundle.url(
             forResource: name,
             withExtension: ext.isEmpty ? nil : ext,
             subdirectory: subdirectory
@@ -158,7 +160,7 @@ public final class WikiContentProvider: Sendable {
     // MARK: - Network
 
     private func fetchRawContent(_ path: String) async throws -> String {
-        let url = WikiConstants.rawURL(for: path)
+        let url = configuration.rawURL(for: path)
         let (data, response) = try await session.data(from: url)
 
         if let httpResponse = response as? HTTPURLResponse,

@@ -1,15 +1,17 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import Foundation
 
 public final class WikiContentCache: @unchecked Sendable {
     private let cacheDirectory: URL
+    private let configuration: WikiConfiguration
     private nonisolated(unsafe) let fileManager = FileManager.default
 
-    public init() {
+    public init(configuration: WikiConfiguration) {
+        self.configuration = configuration
         let cachesDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        self.cacheDirectory = cachesDir.appendingPathComponent(WikiConstants.cacheDirectoryName)
+        self.cacheDirectory = cachesDir.appendingPathComponent(configuration.cacheNamespace)
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
@@ -40,7 +42,7 @@ public final class WikiContentCache: @unchecked Sendable {
     // MARK: - Navigation Tree Cache (UserDefaults)
 
     public func cachedNavigationTree() -> WikiNavigationTree? {
-        guard let data = UserDefaults.standard.data(forKey: WikiConstants.navigationCacheKey) else {
+        guard let data = UserDefaults.standard.data(forKey: configuration.navigationCacheKey) else {
             return nil
         }
         return try? JSONDecoder().decode(WikiNavigationTree.self, from: data)
@@ -48,12 +50,12 @@ public final class WikiContentCache: @unchecked Sendable {
 
     public func cacheNavigationTree(_ tree: WikiNavigationTree) {
         guard let data = try? JSONEncoder().encode(tree) else { return }
-        UserDefaults.standard.set(data, forKey: WikiConstants.navigationCacheKey)
-        setTimestamp(for: WikiConstants.navigationTimestampKey)
+        UserDefaults.standard.set(data, forKey: configuration.navigationCacheKey)
+        setTimestamp(for: configuration.navigationTimestampKey)
     }
 
     public func isNavigationCacheValid() -> Bool {
-        isTimestampValid(for: WikiConstants.navigationTimestampKey)
+        isTimestampValid(for: configuration.navigationTimestampKey)
     }
 
     // MARK: - Clear
@@ -61,13 +63,13 @@ public final class WikiContentCache: @unchecked Sendable {
     public func clearAll() {
         try? fileManager.removeItem(at: cacheDirectory)
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        UserDefaults.standard.removeObject(forKey: WikiConstants.navigationCacheKey)
-        UserDefaults.standard.removeObject(forKey: WikiConstants.navigationTimestampKey)
+        UserDefaults.standard.removeObject(forKey: configuration.navigationCacheKey)
+        UserDefaults.standard.removeObject(forKey: configuration.navigationTimestampKey)
     }
 
     // MARK: - Test seams
     //
-    // `isTimestampValid` compares against `WikiConstants.cacheTTL` (24h), which unit tests
+    // `isTimestampValid` compares against `configuration.cacheTTL` (24h), which unit tests
     // cannot practically wait out. These let tests simulate a stale cache deterministically
     // without changing the cached content itself, exercising the exact "serve stale + refresh
     // in background" path `WikiContentProvider` implements.
@@ -79,7 +81,7 @@ public final class WikiContentCache: @unchecked Sendable {
 
     /// Test seam: force the navigation tree cache timestamp to appear expired.
     func expireNavigationCache() {
-        UserDefaults.standard.set(Date.distantPast, forKey: WikiConstants.navigationTimestampKey)
+        UserDefaults.standard.set(Date.distantPast, forKey: configuration.navigationTimestampKey)
     }
 
     // MARK: - Private
@@ -100,6 +102,6 @@ public final class WikiContentCache: @unchecked Sendable {
         guard let timestamp = UserDefaults.standard.object(forKey: key) as? Date else {
             return false
         }
-        return Date().timeIntervalSince(timestamp) < WikiConstants.cacheTTL
+        return Date().timeIntervalSince(timestamp) < configuration.cacheTTL
     }
 }

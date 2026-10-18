@@ -1,5 +1,5 @@
 // Copyright 2026 iCube Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// Licensed under the Provenance License (see LICENSE.md).
 
 import XCTest
 @testable import PVHelp
@@ -228,14 +228,14 @@ final class GitBookPreprocessorTests: XCTestCase {
 
     func testResolveImagePaths() {
         let input = "![Screenshot](.gitbook/assets/screenshot.png)"
-        let result = GitBookPreprocessor.resolveImagePaths(input)
+        let result = GitBookPreprocessor.resolveImagePaths(input, assetBaseURL: TestWiki.configuration.baseURL)
         XCTAssertTrue(result.contains("https://raw.githubusercontent.com/Provenance-Emu/icube-wiki/master/.gitbook/assets/screenshot.png"))
         XCTAssertFalse(result.contains("(.gitbook/"))
     }
 
     func testResolveRelativeImagePaths() {
         let input = "![Alt](../.gitbook/assets/image.jpg)"
-        let result = GitBookPreprocessor.resolveImagePaths(input)
+        let result = GitBookPreprocessor.resolveImagePaths(input, assetBaseURL: TestWiki.configuration.baseURL)
         XCTAssertTrue(result.contains("https://raw.githubusercontent.com/Provenance-Emu/icube-wiki/master/.gitbook/assets/image.jpg"))
     }
 
@@ -246,7 +246,7 @@ final class GitBookPreprocessorTests: XCTestCase {
         ![Second](.gitbook/assets/second.png)
         """
 
-        let result = GitBookPreprocessor.resolveImagePaths(input)
+        let result = GitBookPreprocessor.resolveImagePaths(input, assetBaseURL: TestWiki.configuration.baseURL)
         XCTAssertTrue(result.contains("first.png"))
         XCTAssertTrue(result.contains("second.png"))
         XCTAssertFalse(result.contains("(.gitbook/"))
@@ -269,7 +269,7 @@ final class GitBookPreprocessorTests: XCTestCase {
         ![Screenshot](.gitbook/assets/test.png)
         """
 
-        let result = GitBookPreprocessor.process(input)
+        let result = GitBookPreprocessor.process(input, assetBaseURL: TestWiki.configuration.baseURL)
         XCTAssertFalse(result.contains("---"))
         XCTAssertFalse(result.contains("{% hint"))
         XCTAssertFalse(result.contains("(.gitbook/"))
@@ -304,7 +304,7 @@ final class GitBookPreprocessorTests: XCTestCase {
         </details>
         """
 
-        let result = GitBookPreprocessor.process(input)
+        let result = GitBookPreprocessor.process(input, assetBaseURL: TestWiki.configuration.baseURL)
 
         XCTAssertFalse(result.contains("{%"))
         XCTAssertFalse(result.contains("<table>"))
