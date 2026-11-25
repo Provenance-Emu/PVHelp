@@ -9,7 +9,7 @@ import Foundation
 /// Markdown, so this is a no-op pass-through for them today — it exists so pages written the
 /// GitBook way (hint blocks, tabs, HTML tables) render correctly once the real wiki repo is
 /// live and contributors reuse GitBook conventions.
-public enum GitBookPreprocessor {
+@frozen public enum GitBookPreprocessor {
     /// Apply all GitBook-to-standard-markdown transforms in sequence.
     /// - Parameter assetBaseURL: where relative `.gitbook/assets/…` images resolve
     ///   (the wiki's raw-content base, `WikiConfiguration.baseURL`).
