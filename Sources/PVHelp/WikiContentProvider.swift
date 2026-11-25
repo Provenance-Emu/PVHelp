@@ -181,7 +181,7 @@ public final class WikiContentProvider: Sendable {
     }
 }
 
-public enum WikiContentError: Error, LocalizedError {
+@frozen public enum WikiContentError: Error, LocalizedError {
     case httpError(Int)
     case invalidEncoding
 
